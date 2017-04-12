@@ -22,10 +22,11 @@ import (
 	"bufio"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	iconv "gopkg.in/iconv.v1"
 )
 
 // Form represents the PDF form.
@@ -34,54 +35,41 @@ type Form map[string]interface{}
 
 // Fill a PDF form with the specified form values and create a final filled PDF file.
 // One variadic boolean specifies, whenever to overwrite the destination file if it exists.
-func Fill(form Form, formPDFFile, destPDFFile string, overwrite ...bool) (err error) {
-	// Get the absolute paths.
-	formPDFFile, err = filepath.Abs(formPDFFile)
-	if err != nil {
-		return fmt.Errorf("failed to create the absolute path: %v", err)
-	}
-	destPDFFile, err = filepath.Abs(destPDFFile)
-	if err != nil {
-		return fmt.Errorf("failed to create the absolute path: %v", err)
-	}
-
-	// Check if the form file exists.
-	e, err := exists(formPDFFile)
-	if err != nil {
-		return fmt.Errorf("failed to check if form PDF file exists: %v", err)
-	} else if !e {
-		return fmt.Errorf("form PDF file does not exists: '%s'", formPDFFile)
-	}
+func Fill(form Form, formPDFFile, destPDFFile string, overwrite bool) error {
+	var err error
 
 	// Check if the pdftk utility exists.
-	_, err = exec.LookPath("pdftk")
-	if err != nil {
-		return fmt.Errorf("pdftk utility is not installed!")
+	if _, err := exec.LookPath("pdftk"); err != nil {
+		return err
+	}
+
+	// Get the absolute paths.
+	if formPDFFile, err = getAbs(formPDFFile); err != nil {
+		return err
+	}
+
+	if destPDFFile, err = filepath.Abs(destPDFFile); err != nil {
+		return err
 	}
 
 	// Create a temporary directory.
 	tmpDir, err := ioutil.TempDir("", "fillpdf-")
 	if err != nil {
-		return fmt.Errorf("failed to create temporary directory: %v", err)
+		return err
 	}
 
 	// Remove the temporary directory on defer again.
-	defer func() {
-		errD := os.RemoveAll(tmpDir)
-		// Log the error only.
-		if errD != nil {
-			log.Printf("fillpdf: failed to remove temporary directory '%s' again: %v", tmpDir, errD)
-		}
-	}()
+	// defer func() {
+	// 	os.RemoveAll(tmpDir)
+	// }()
 
 	// Create the temporary output file path.
 	outputFile := filepath.Clean(tmpDir + "/output.pdf")
 
 	// Create the fdf data file.
 	fdfFile := filepath.Clean(tmpDir + "/data.fdf")
-	err = createFdfFile(form, fdfFile)
-	if err != nil {
-		return fmt.Errorf("failed to create fdf form data file: %v", err)
+	if err := createFdfFile(form, fdfFile); err != nil {
+		return err
 	}
 
 	// Create the pdftk command line arguments.
@@ -93,35 +81,33 @@ func Fill(form Form, formPDFFile, destPDFFile string, overwrite ...bool) (err er
 	}
 
 	// Run the pdftk utility.
-	err = runCommandInPath(tmpDir, "pdftk", args...)
-	if err != nil {
+	if err := runCommandInPath(tmpDir, "pdftk", args...); err != nil {
 		return fmt.Errorf("pdftk error: %v", err)
 	}
 
 	// Check if the destination file exists.
-	e, err = exists(destPDFFile)
+	e, err := exists(destPDFFile)
 	if err != nil {
-		return fmt.Errorf("failed to check if destination PDF file exists: %v", err)
+		return err
 	} else if e {
-		if len(overwrite) == 0 || !overwrite[0] {
+		if !overwrite {
 			return fmt.Errorf("destination PDF file already exists: '%s'", destPDFFile)
 		}
 
-		err = os.Remove(destPDFFile)
-		if err != nil {
-			return fmt.Errorf("failed to remove destination PDF file: %v", err)
+		if err := os.Remove(destPDFFile); err != nil {
+			return err
 		}
 	}
 
 	// On success, copy the output file to the final destination.
-	err = copyFile(outputFile, destPDFFile)
-	if err != nil {
-		return fmt.Errorf("failed to copy created output PDF to final destination: %v", err)
+	if err := copyFile(outputFile, destPDFFile); err != nil {
+		return err
 	}
 
 	return nil
 }
 
+// createFdfFile with 16 bit encoded utf to enable creation of pdf with special characters
 func createFdfFile(form Form, path string) error {
 	// Create the file.
 	file, err := os.Create(path)
@@ -131,10 +117,16 @@ func createFdfFile(form Form, path string) error {
 	defer file.Close()
 
 	// Create a new writer.
-	w := bufio.NewWriter(file)
+	b := bufio.NewWriter(file)
 
-	// Write the fdf header.
-	fmt.Fprintln(w, fdfHeader)
+	// Header
+	b.Write([]byte("%FDF-1.2\n"))
+	b.Write([]byte("\xE2\xE3\xCF\xD3\n"))
+	b.Write([]byte("1 0 obj \n"))
+	b.Write([]byte("<<\n"))
+	b.Write([]byte("/FDF \n"))
+	b.Write([]byte("<<\n"))
+	b.Write([]byte("/Fields [\n"))
 
 	// Write the form data.
 	for key, value := range form {
@@ -149,28 +141,37 @@ func createFdfFile(form Form, path string) error {
 		default:
 			valStr = fmt.Sprintf("%v", value)
 		}
-		fmt.Fprintf(w, "<< /T (%s) /V (%s)>>\n", key, valStr)
+
+		b.Write([]byte("<<\n"))
+		b.Write([]byte("/T (" + toUTF16(key) + ")\n"))
+		b.Write([]byte("/V (" + toUTF16(valStr) + ")\n"))
+		b.Write([]byte(">>\n"))
 	}
 
-	// Write the fdf footer.
-	fmt.Fprintln(w, fdfFooter)
+	// Footer
+	b.Write([]byte("]\n"))
+	b.Write([]byte(">>\n"))
+	b.Write([]byte(">>\n"))
+	b.Write([]byte("endobj \n"))
+	b.Write([]byte("trailer\n"))
+	b.Write([]byte("\n"))
+	b.Write([]byte("<<\n"))
+	b.Write([]byte("/Root 1 0 R\n"))
+	b.Write([]byte(">>\n"))
+	b.Write([]byte("%%EOF\n"))
 
 	// Flush everything.
-	return w.Flush()
+	return b.Flush()
 }
 
-const fdfHeader = `%FDF-1.2
-%,,oe"
-1 0 obj
-<<
-/FDF << /Fields [`
-
-const fdfFooter = `]
->>
->>
-endobj
-trailer
-<<
-/Root 1 0 R
->>
-%%EOF`
+// Each field is interptreted as one UTF-16 entity and thus needs to have the BOM bytes on each seperate string.
+// Achieve this by opening a new handle to all convertions
+func toUTF16(input string) string {
+	cd, err := iconv.Open("utf-16", "utf-8")
+	if err != nil {
+		fmt.Println("iconv.Open failed!")
+		return ""
+	}
+	defer cd.Close()
+	return cd.ConvString(input)
+}
