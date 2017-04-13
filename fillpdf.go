@@ -20,13 +20,13 @@ package fillpdf
 
 import (
 	"bufio"
+	"encoding/binary"
 	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
-
-	iconv "gopkg.in/iconv.v1"
+	"unicode/utf16"
 )
 
 // Form represents the PDF form.
@@ -59,9 +59,9 @@ func Fill(form Form, formPDFFile, destPDFFile string, overwrite bool) error {
 	}
 
 	// Remove the temporary directory on defer again.
-	// defer func() {
-	// 	os.RemoveAll(tmpDir)
-	// }()
+	defer func() {
+		os.RemoveAll(tmpDir)
+	}()
 
 	// Create the temporary output file path.
 	outputFile := filepath.Clean(tmpDir + "/output.pdf")
@@ -120,13 +120,13 @@ func createFdfFile(form Form, path string) error {
 	b := bufio.NewWriter(file)
 
 	// Header
-	b.Write([]byte("%FDF-1.2\n"))
-	b.Write([]byte("\xE2\xE3\xCF\xD3\n"))
-	b.Write([]byte("1 0 obj \n"))
-	b.Write([]byte("<<\n"))
-	b.Write([]byte("/FDF \n"))
-	b.Write([]byte("<<\n"))
-	b.Write([]byte("/Fields [\n"))
+	b.WriteString("%FDF-1.2\n")
+	b.WriteString("\xE2\xE3\xCF\xD3\n")
+	b.WriteString("1 0 obj \n")
+	b.WriteString("<<\n")
+	b.WriteString("/FDF \n")
+	b.WriteString("<<\n")
+	b.WriteString("/Fields [\n")
 
 	// Write the form data.
 	for key, value := range form {
@@ -142,36 +142,46 @@ func createFdfFile(form Form, path string) error {
 			valStr = fmt.Sprintf("%v", value)
 		}
 
-		b.Write([]byte("<<\n"))
-		b.Write([]byte("/T (" + toUTF16(key) + ")\n"))
-		b.Write([]byte("/V (" + toUTF16(valStr) + ")\n"))
-		b.Write([]byte(">>\n"))
+		b.WriteString("<<\n")
+		b.WriteString("/T (")
+		b.Write(EncodeUTF16(key, true))
+		b.WriteString(")\n")
+		b.WriteString("/V (")
+		b.Write(EncodeUTF16(valStr, true))
+		b.WriteString(")\n")
+		b.WriteString(">>\n")
 	}
 
 	// Footer
-	b.Write([]byte("]\n"))
-	b.Write([]byte(">>\n"))
-	b.Write([]byte(">>\n"))
-	b.Write([]byte("endobj \n"))
-	b.Write([]byte("trailer\n"))
-	b.Write([]byte("\n"))
-	b.Write([]byte("<<\n"))
-	b.Write([]byte("/Root 1 0 R\n"))
-	b.Write([]byte(">>\n"))
-	b.Write([]byte("%%EOF\n"))
+	b.WriteString("]\n")
+	b.WriteString(">>\n")
+	b.WriteString(">>\n")
+	b.WriteString("endobj \n")
+	b.WriteString("trailer\n")
+	b.WriteString("\n")
+	b.WriteString("<<\n")
+	b.WriteString("/Root 1 0 R\n")
+	b.WriteString(">>\n")
+	b.WriteString("%%EOF\n")
 
 	// Flush everything.
 	return b.Flush()
 }
 
-// Each field is interptreted as one UTF-16 entity and thus needs to have the BOM bytes on each seperate string.
-// Achieve this by opening a new handle to all convertions
-func toUTF16(input string) string {
-	cd, err := iconv.Open("utf-16", "utf-8")
-	if err != nil {
-		fmt.Println("iconv.Open failed!")
-		return ""
+// Taken from https://gist.github.com/ik5/65de721ca495fa1bf451
+// EncodeUTF16 get a utf8 string and translate it into a slice of bytes of ucs2
+func EncodeUTF16(s string, addBom bool) []byte {
+	r := []rune(s)
+	iresult := utf16.Encode(r)
+	var bytes []byte
+	if addBom {
+		bytes = make([]byte, 2)
+		bytes = []byte{254, 255}
 	}
-	defer cd.Close()
-	return cd.ConvString(input)
+	for _, i := range iresult {
+		temp := make([]byte, 2)
+		binary.BigEndian.PutUint16(temp, i)
+		bytes = append(bytes, temp...)
+	}
+	return bytes
 }
