@@ -27,6 +27,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"unicode/utf16"
+
+	"github.com/mindoktor/mderrors"
 )
 
 // Form represents the PDF form.
@@ -40,22 +42,22 @@ func Fill(form Form, formPDFFile, destPDFFile string, overwrite bool) error {
 
 	// Check if the pdftk utility exists.
 	if _, err := exec.LookPath("pdftk"); err != nil {
-		return err
+		return mderrors.Wrap(err)
 	}
 
 	// Get the absolute paths.
 	if formPDFFile, err = getAbs(formPDFFile); err != nil {
-		return err
+		return mderrors.Wrap(err)
 	}
 
 	if destPDFFile, err = filepath.Abs(destPDFFile); err != nil {
-		return err
+		return mderrors.Wrap(err)
 	}
 
 	// Create a temporary directory.
 	tmpDir, err := ioutil.TempDir("", "fillpdf-")
 	if err != nil {
-		return err
+		return mderrors.Wrap(err)
 	}
 
 	// Remove the temporary directory on defer again.
@@ -69,7 +71,7 @@ func Fill(form Form, formPDFFile, destPDFFile string, overwrite bool) error {
 	// Create the fdf data file.
 	fdfFile := filepath.Clean(tmpDir + "/data.fdf")
 	if err := createFdfFile(form, fdfFile); err != nil {
-		return err
+		return mderrors.Wrap(err)
 	}
 
 	// Create the pdftk command line arguments.
@@ -82,26 +84,26 @@ func Fill(form Form, formPDFFile, destPDFFile string, overwrite bool) error {
 
 	// Run the pdftk utility.
 	if err := runCommandInPath(tmpDir, "pdftk", args...); err != nil {
-		return fmt.Errorf("pdftk error: %v", err)
+		return mderrors.Wrap(err)
 	}
 
 	// Check if the destination file exists.
 	e, err := exists(destPDFFile)
 	if err != nil {
-		return err
+		return mderrors.Wrap(err)
 	} else if e {
 		if !overwrite {
 			return fmt.Errorf("destination PDF file already exists: '%s'", destPDFFile)
 		}
 
 		if err := os.Remove(destPDFFile); err != nil {
-			return err
+			return mderrors.Wrap(err)
 		}
 	}
 
 	// On success, copy the output file to the final destination.
 	if err := copyFile(outputFile, destPDFFile); err != nil {
-		return err
+		return mderrors.Wrap(err)
 	}
 
 	return nil
@@ -112,7 +114,7 @@ func createFdfFile(form Form, path string) error {
 	// Create the file.
 	file, err := os.Create(path)
 	if err != nil {
-		return err
+		return mderrors.Wrap(err)
 	}
 	defer file.Close()
 

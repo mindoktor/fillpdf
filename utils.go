@@ -20,27 +20,28 @@ package fillpdf
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/mindoktor/mderrors"
 )
 
 func getAbs(path string) (string, error) {
 	// Get the absolute paths.
 	absPath, err := filepath.Abs(path)
 	if err != nil {
-		return "", fmt.Errorf("failed to get the absolute path: %v", err)
+		return "", mderrors.Wrap(err)
 	}
 
 	// Check if the form file exists.
 	e, err := exists(path)
 	if err != nil {
-		return "", fmt.Errorf("failed to check if file exists: %v", err)
+		return "", mderrors.Wrap(err)
 	} else if !e {
-		return "", fmt.Errorf("file does not exists: '%s'", path)
+		return "", mderrors.New("file does not exists", path)
 	}
 
 	return absPath, nil
@@ -55,22 +56,22 @@ func exists(path string) (bool, error) {
 	if os.IsNotExist(err) {
 		return false, nil
 	}
-	return false, err
+	return false, mderrors.Wrap(err)
 }
 
 // copyFile copies the contents of the file named src to the file named
 // by dst. The file will be created if it does not already exist. If the
 // destination file exists, all it's contents will be replaced by the contents
 // of the source file.
-func copyFile(src, dst string) (err error) {
+func copyFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
-		return
+		return mderrors.Wrap(err)
 	}
 	defer in.Close()
 	out, err := os.Create(dst)
 	if err != nil {
-		return
+		return mderrors.Wrap(err)
 	}
 	defer func() {
 		cerr := out.Close()
@@ -79,10 +80,9 @@ func copyFile(src, dst string) (err error) {
 		}
 	}()
 	if _, err = io.Copy(out, in); err != nil {
-		return
+		return mderrors.Wrap(err)
 	}
-	err = out.Sync()
-	return
+	return mderrors.Wrap(out.Sync())
 }
 
 // runCommandInPath runs a command and waits for it to exit.
@@ -98,7 +98,7 @@ func runCommandInPath(dir, name string, args ...string) error {
 	// Start the command and wait for it to exit.
 	err := cmd.Run()
 	if err != nil {
-		return fmt.Errorf(strings.TrimSpace(stderr.String()))
+		return mderrors.Wrap(err, "stderr", strings.TrimSpace(stderr.String()))
 	}
 
 	return nil
