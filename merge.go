@@ -25,26 +25,21 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"time"
 )
 
-// Multistamp stamps one PDF ontop of another, returns a reader to bytes generated.
-func Multistamp(stampontoPDFFile, stampPDFFile string) (io.Reader, error) {
-	var err error
+// Merge concatenates all input <files> and outputs one single pdf in <output>
+func Merge(files ...string) (io.Reader, error) {
+	args := []string{}
 
-	// Check if the pdftk utility exists.
-	if _, err := exec.LookPath("pdftk"); err != nil {
-		return nil, err
-	}
-
-	if stampontoPDFFile, err = getAbs(stampontoPDFFile); err != nil {
-		return nil, err
-	}
-
-	stampPDFFile, err = getAbs(stampPDFFile)
-	if err != nil {
-		return nil, err
+	// Get abs path for all input files while verifying their existence
+	for _, f := range files {
+		fAbsPath, err := getAbs(f)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, fAbsPath)
 	}
 
 	// Create a temporary directory.
@@ -59,14 +54,10 @@ func Multistamp(stampontoPDFFile, stampPDFFile string) (io.Reader, error) {
 	}()
 
 	// Create the temporary output file path.
-	outputFile := filepath.Clean(tmpDir + "/output.pdf")
+	outputFile := filepath.Join(tmpDir, fmt.Sprintf("%d.pdf", time.Now().Unix()))
 
 	// Create the pdftk command line arguments.
-	args := []string{
-		stampontoPDFFile,
-		"multistamp", stampPDFFile,
-		"output", outputFile,
-	}
+	args = append(args, "cat", "output", outputFile)
 
 	// Run the pdftk utility.
 	err = runCommandInPath(tmpDir, "pdftk", args...)
