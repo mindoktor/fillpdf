@@ -35,11 +35,11 @@ type Form map[string]interface{}
 
 // Fill a PDF form with the specified form values and create a final filled PDF file.
 // One variadic boolean specifies, whenever to overwrite the destination file if it exists.
-// Checkboxes specify one string for checked (trueString) and one string for
-// unchecked (falseString). The specification can be done on each individual
+// Checkboxes specify one string for checked (checkedString) and one string for
+// unchecked (uncheckedString). The specification can be done on each individual
 // checkbox, but lets assume that all checkboxes in the same document will
 // use the same strings.
-func Fill(form Form, formPDFFile, destPDFFile, trueString, falseString string, overwrite bool) error {
+func Fill(form Form, formPDFFile, destPDFFile, checkedString, uncheckedString string, overwrite bool) error {
 	var err error
 
 	// Check if the pdftk utility exists.
@@ -72,7 +72,7 @@ func Fill(form Form, formPDFFile, destPDFFile, trueString, falseString string, o
 
 	// Create the fdf data file.
 	fdfFile := filepath.Clean(tmpDir + "/data.fdf")
-	if err := createFdfFile(form, fdfFile, trueString, falseString); err != nil {
+	if err := createFdfFile(form, fdfFile, checkedString, uncheckedString); err != nil {
 		return err
 	}
 
@@ -112,7 +112,7 @@ func Fill(form Form, formPDFFile, destPDFFile, trueString, falseString string, o
 }
 
 // createFdfFile with 16 bit encoded utf to enable creation of pdf with special characters
-func createFdfFile(form Form, path, trueString, falseString string) error {
+func createFdfFile(form Form, path, checkedString, uncheckedString string) error {
 	// Create the file.
 	file, err := os.Create(path)
 	if err != nil {
@@ -138,9 +138,9 @@ func createFdfFile(form Form, path, trueString, falseString string) error {
 		switch v := value.(type) {
 		case bool:
 			if v {
-				valStr = trueString
+				valStr = checkedString
 			} else {
-				valStr = falseString
+				valStr = uncheckedString
 			}
 		default:
 			valStr = fmt.Sprintf("%v", value)
