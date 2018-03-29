@@ -33,7 +33,7 @@ func main() {
 	}
 
 	// Fill the form PDF with our values.
-	err := fillpdf.Fill(form, "form.pdf", "filled.pdf", true)
+	err := fillpdf.Fill(form, "form.pdf", "filled.pdf", "On", "Off", true)
 	if err != nil {
 		log.Fatal(err)
 	}
