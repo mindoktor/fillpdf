@@ -21,6 +21,7 @@ package fillpdf
 import (
 	"bufio"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -147,12 +148,12 @@ func createFdfFile(form Form, path, checkedString, uncheckedString string) error
 		}
 
 		b.WriteString("<<\n")
-		b.WriteString("/T (")
-		b.Write(EncodeUTF16(key, true))
-		b.WriteString(")\n")
-		b.WriteString("/V (")
-		b.Write(EncodeUTF16(valStr, true))
-		b.WriteString(")\n")
+		b.WriteString("/T <")
+		b.WriteString(hex.EncodeToString(EncodeUTF16(key, true)))
+		b.WriteString(">\n")
+		b.WriteString("/V <")
+		b.WriteString(hex.EncodeToString(EncodeUTF16(valStr, true)))
+		b.WriteString(">\n")
 		b.WriteString(">>\n")
 	}
 
