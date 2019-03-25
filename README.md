@@ -6,44 +6,17 @@ This fork extends with some more pdftk commands
 * Multistamp
 * Ability to generate PDF's with special characters (with flatten) with pdftk. (Limited by font in PDF)
 
+2019: the library has been turned into a standalone server.
+
+Build and push a new container like this:
+`$ gcloud builds submit -t gcr.io/$PROJECT/fillpdf:v$VERSION --project $PROJECT`
+Change $PROJECT and $VERSION to what you need.
+
+Then you have to redeploy the service. Bump the version in main repo: devops/k8s/deployment_fillpdf.yaml
+For example:
+$ SITE=se-test fab gen_env_files
+$ kubectl apply -f devops/k8s/deployment_fillpdf.yaml
+
 ## Documentation 
 
 Check the Documentation at [GoDoc.org](https://godoc.org/github.com/desertbit/fillpdf).
-
-
-## Sample
-
-There is an example:
-
-```go
-package main
-
-import (
-	"log"
-
-	"github.com/phelian/fillpdf"
-)
-
-func main() {
-	// Create the form values.
-	form := fillpdf.Form{
-		"field_1": "Hello",
-		"field_2": "World",
-		"field_3": "with special åäöéè",
-	}
-
-	// Fill the form PDF with our values.
-	err := fillpdf.Fill(form, "form.pdf", "filled.pdf", "On", "Off", true)
-	if err != nil {
-		log.Fatal(err)
-	}
-}
-```
-
-Run the example as following:
-
-```
-cd sample
-go build
-./sample
-```

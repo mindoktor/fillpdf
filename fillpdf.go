@@ -16,101 +16,20 @@
  *  limitations under the License.
  */
 
-package fillpdf
+package main
 
 import (
 	"bufio"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"os/exec"
-	"path/filepath"
 	"unicode/utf16"
 )
 
 // Form represents the PDF form.
 // This is a key value map.
 type Form map[string]interface{}
-
-// Fill a PDF form with the specified form values and create a final filled PDF file.
-// One variadic boolean specifies, whenever to overwrite the destination file if it exists.
-// Checkboxes specify one string for checked (checkedString) and one string for
-// unchecked (uncheckedString). The specification can be done on each individual
-// checkbox, but lets assume that all checkboxes in the same document will
-// use the same strings.
-func Fill(form Form, formPDFFile, destPDFFile, checkedString, uncheckedString string, overwrite bool) error {
-	var err error
-
-	// Check if the pdftk utility exists.
-	if _, err := exec.LookPath("pdftk"); err != nil {
-		return err
-	}
-
-	// Get the absolute paths.
-	if formPDFFile, err = getAbs(formPDFFile); err != nil {
-		return err
-	}
-
-	if destPDFFile, err = filepath.Abs(destPDFFile); err != nil {
-		return err
-	}
-
-	// Create a temporary directory.
-	tmpDir, err := ioutil.TempDir("", "fillpdf-")
-	if err != nil {
-		return err
-	}
-
-	// Remove the temporary directory on defer again.
-	defer func() {
-		os.RemoveAll(tmpDir)
-	}()
-
-	// Create the temporary output file path.
-	outputFile := filepath.Clean(tmpDir + "/output.pdf")
-
-	// Create the fdf data file.
-	fdfFile := filepath.Clean(tmpDir + "/data.fdf")
-	if err := createFdfFile(form, fdfFile, checkedString, uncheckedString); err != nil {
-		return err
-	}
-
-	// Create the pdftk command line arguments.
-	args := []string{
-		formPDFFile,
-		"fill_form", fdfFile,
-		"output", outputFile,
-		"flatten",
-	}
-
-	// Run the pdftk utility.
-	if err := runCommandInPath(tmpDir, "pdftk", args...); err != nil {
-		return fmt.Errorf("pdftk error: %v", err)
-	}
-
-	// Check if the destination file exists.
-	e, err := exists(destPDFFile)
-	if err != nil {
-		return err
-	} else if e {
-		if !overwrite {
-			return fmt.Errorf("destination PDF file already exists: '%s'", destPDFFile)
-		}
-
-		if err := os.Remove(destPDFFile); err != nil {
-			return err
-		}
-	}
-
-	// On success, copy the output file to the final destination.
-	if err := copyFile(outputFile, destPDFFile); err != nil {
-		return err
-	}
-
-	return nil
-}
 
 // createFdfFile with 16 bit encoded utf to enable creation of pdf with special characters
 func createFdfFile(form Form, path, checkedString, uncheckedString string) error {
@@ -149,10 +68,10 @@ func createFdfFile(form Form, path, checkedString, uncheckedString string) error
 
 		b.WriteString("<<\n")
 		b.WriteString("/T <")
-		b.WriteString(hex.EncodeToString(EncodeUTF16(key, true)))
+		b.WriteString(hex.EncodeToString(encodeUTF16(key, true)))
 		b.WriteString(">\n")
 		b.WriteString("/V <")
-		b.WriteString(hex.EncodeToString(EncodeUTF16(valStr, true)))
+		b.WriteString(hex.EncodeToString(encodeUTF16(valStr, true)))
 		b.WriteString(">\n")
 		b.WriteString(">>\n")
 	}
@@ -173,9 +92,9 @@ func createFdfFile(form Form, path, checkedString, uncheckedString string) error
 	return b.Flush()
 }
 
+// encodeUTF16 translates a utf8 string into a slice of bytes of ucs2.
 // Taken from https://gist.github.com/ik5/65de721ca495fa1bf451
-// EncodeUTF16 get a utf8 string and translate it into a slice of bytes of ucs2
-func EncodeUTF16(s string, addBom bool) []byte {
+func encodeUTF16(s string, addBom bool) []byte {
 	r := []rune(s)
 	iresult := utf16.Encode(r)
 	var bytes []byte
