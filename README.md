@@ -9,15 +9,15 @@ This fork extends with some more pdftk commands
 
 2019: the library has been turned into a standalone server.
 
-## Build and push container
+## Build and push docker image
 
-After having merged your changes to the master branch of this repo, build and push a new container:
+After having merged your changes to the master branch of this repo, build and push a new docker image:
 
 `$ gcloud builds submit -t gcr.io/$PROJECT/fillpdf:v$VERSION --project $PROJECT`
 
 Change `$PROJECT` and `$VERSION` to what you need. For the version numbers, use semver principles.
 
-NOTE that the container must be built and pushed for all the projects where you want to deploy the service. Attow these are:
+NOTE that the docker image must be built and pushed for all the projects where you want to deploy the service. Attow these are:
 
 - `mindoktor-dev` (dev and test)
 - `e-vard` (sweden prod)
@@ -25,7 +25,7 @@ NOTE that the container must be built and pushed for all the projects where you 
 
 ## Redeploy the service
 
-During the deployment steps, it is _vital_ that you have selected the correct context and namespace using `kubectx` and `kubens`. Otherwise you may deploy to the wrong project/environment. When deploying to test, note that there is a single fillpdf service for all dev/test envs. This is found in the `default` namespace of the `test-mindoktor-dev` context.
+During the deployment steps, it is _vital_ that you have selected the correct context and namespace using `kubectx` and `kubens`. Otherwise you may deploy to the wrong project/environment. When deploying to test, note that there is a single fillpdf service for all dev/test envs. This is found in the `default` namespace of the test cluster context.
 
 ### Step 1
 
