@@ -29,7 +29,7 @@ During the deployment steps, it is _vital_ that you have selected the correct co
 
 ### Step 1
 
-In the `mindoktor` repo root: Bump the version in the fillpdf deployment file: `devops/k8s/deployment_fillpdf.yaml`
+In the `mindoktor` repo root: Bump the version in the fillpdf deployment file: `devops/k8s/deployment_fillpdf.yaml` and commit the file. NOTE that if you are deploying to production, the change must (attow) first be merged to master since it is only possible to deploy to production from the master branch of the `mindoktor` and `mindoktor-app` repos.
 
 ### Step 2
 
